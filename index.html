@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Crochet Sim</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <aside id="panel">
+        <h1>Crochet Sim</h1>
+        <label for="pattern">Pattern (one round per line)</label>
+        <textarea id="pattern" spellcheck="false"></textarea>
+        <div class="row">
+          <button id="run">Simulate</button>
+          <button id="toggle">Pause</button>
+          <select id="presets"></select>
+        </div>
+        <div class="row">
+          <label for="stuffing">Stuffing</label>
+          <input type="range" id="stuffing" min="0" max="3" step="0.1" value="1" />
+          <span id="stuffingValue">auto</span>
+        </div>
+        <div id="messages"></div>
+        <table id="rounds"></table>
+        <details>
+          <summary>Notation</summary>
+          <pre>R1: 6 sc in MR
+R2: inc x6           (2 sc in each st)
+R3: (sc, inc) x6
+R4: (2 sc, inc) x6
+R5-8: sc around      (rounds 5 to 8)
+R9: (2 sc, dec) x6
+R10: dec x6
+Stitches: sc hdc dc inc dec
+Also: ch 12 (start a row/tube), * ... * rep</pre>
+        </details>
+      </aside>
+      <main id="view"></main>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
