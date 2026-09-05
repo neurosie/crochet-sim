@@ -26,7 +26,9 @@ npm run build    # typecheck + production bundle in dist/
    ruffles rather than springs that stretch.
 3. `src/sim.ts` relaxes the graph in 3D: springs, short-range repulsion so the
    fabric has thickness, and optional outward pressure along the surface
-   normal to model stuffing.
+   normal to model stuffing. Stuffing pushes on the air the piece holds, so it
+   scales with how much of a closed body the fabric makes and does nothing at
+   all to something with no inside, like a flat circle or a ruffle.
 4. `src/render.ts` draws it with Three.js. Drag to orbit, scroll to zoom.
 
 Units: a single crochet is 1 wide and 0.95 tall. Other stitches scale from that.

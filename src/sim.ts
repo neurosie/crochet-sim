@@ -28,6 +28,23 @@ export const DEFAULT_PARAMS: SimParams = {
   pressure: 0,
 };
 
+/** Solve a symmetric 3x3 system by Cramer's rule. Degenerate arrangements —
+ *  a handful of stitches all in a line — give no solution and no correction. */
+function solve3(m: Float64Array, bx: number, by: number, bz: number): [number, number, number] {
+  const det =
+    m[0] * (m[4] * m[8] - m[5] * m[7]) -
+    m[1] * (m[3] * m[8] - m[5] * m[6]) +
+    m[2] * (m[3] * m[7] - m[4] * m[6]);
+  if (!(Math.abs(det) > 1e-9)) return [0, 0, 0];
+  const dx =
+    bx * (m[4] * m[8] - m[5] * m[7]) - m[1] * (by * m[8] - m[5] * bz) + m[2] * (by * m[7] - m[4] * bz);
+  const dy =
+    m[0] * (by * m[8] - m[5] * bz) - bx * (m[3] * m[8] - m[5] * m[6]) + m[2] * (m[3] * bz - by * m[6]);
+  const dz =
+    m[0] * (m[4] * bz - by * m[7]) - m[1] * (m[3] * bz - by * m[6]) + bx * (m[3] * m[7] - m[4] * m[6]);
+  return [dx / det, dy / det, dz / det];
+}
+
 export class Simulation {
   readonly n: number;
   readonly pos: Float32Array;
@@ -44,10 +61,18 @@ export class Simulation {
   private readonly colPrev: Int32Array;
   private readonly colNext: Int32Array;
   private readonly normals: Float32Array;
+  /** Area of the patch of fabric each stitch stands for. */
+  private readonly areas: Float32Array;
   params: SimParams;
   private grid = new Map<number, number[]>();
+  private readonly inertia = new Float64Array(9);
   /** Running measure of how much the system is still moving. */
   energy = 1;
+  /** Smoothed `enclosure()`, so the stuffing cannot chatter; -1 until measured. */
+  private held = -1;
+  /** Fraction of the stuffing the shape can take: 1 for a closed body, 0 for
+   *  fabric with no inside to hold any. Only meaningful once stuffed. */
+  stuffable = 1;
 
   constructor(readonly graph: StitchGraph, params: Partial<SimParams> = {}) {
     this.params = { ...DEFAULT_PARAMS, ...params };
@@ -71,6 +96,7 @@ export class Simulation {
     this.colPrev = new Int32Array(this.n).fill(-1);
     this.colNext = new Int32Array(this.n).fill(-1);
     this.normals = new Float32Array(this.n * 3);
+    this.areas = new Float32Array(this.n);
     for (const r of graph.rounds) {
       if (r.count < 3) continue;
       for (let i = 0; i < r.count; i++) {
@@ -163,21 +189,65 @@ export class Simulation {
     return Math.min(16, Math.max(3, Math.round(widest / 12)));
   }
 
+  /** Apply the stuffing's outward push, with the net force and net spin taken
+   *  back out. Stuffing inside a shape cannot shove or spin the shape as a
+   *  whole: on a closed surface the outward pushes cancel on their own, but an
+   *  open one — a bowl, or a ruffle with no inside at all — is left with a
+   *  large residue that drives the whole model around instead of shaping it. */
+  private addPressure(pressure: number) {
+    const { pos, force, normals, n } = this;
+    let fx = 0, fy = 0, fz = 0;
+    let tx = 0, ty = 0, tz = 0;
+    for (let i = 0; i < n; i++) {
+      const px = normals[i * 3] * pressure, py = normals[i * 3 + 1] * pressure, pz = normals[i * 3 + 2] * pressure;
+      fx += px; fy += py; fz += pz;
+      const x = pos[i * 3], y = pos[i * 3 + 1], z = pos[i * 3 + 2];
+      tx += y * pz - z * py; ty += z * px - x * pz; tz += x * py - y * px;
+    }
+    fx /= n; fy /= n; fz /= n;
+
+    // Angular acceleration the residual torque would give the whole model,
+    // from its inertia tensor about the centroid (positions are recentred).
+    const m = this.inertia.fill(0);
+    for (let i = 0; i < n; i++) {
+      const x = pos[i * 3], y = pos[i * 3 + 1], z = pos[i * 3 + 2];
+      const r2 = x * x + y * y + z * z;
+      m[0] += r2 - x * x; m[1] -= x * y; m[2] -= x * z;
+      m[3] -= y * x; m[4] += r2 - y * y; m[5] -= y * z;
+      m[6] -= z * x; m[7] -= z * y; m[8] += r2 - z * z;
+    }
+    const [ax, ay, az] = solve3(m, tx, ty, tz);
+
+    for (let i = 0; i < n; i++) {
+      const x = pos[i * 3], y = pos[i * 3 + 1], z = pos[i * 3 + 2];
+      force[i * 3] += normals[i * 3] * pressure - fx - (ay * z - az * y);
+      force[i * 3 + 1] += normals[i * 3 + 1] * pressure - fy - (az * x - ax * z);
+      force[i * 3 + 2] += normals[i * 3 + 2] * pressure - fz - (ax * y - ay * x);
+    }
+  }
+
   /** Estimate a unit normal per stitch from its row and column neighbours,
-   *  oriented consistently outward (away from the centroid on average). */
+   *  oriented consistently outward (away from the centroid on average), and
+   *  record the patch of fabric each one stands for. */
   private computeNormals() {
-    const { pos, normals, n } = this;
+    const { pos, normals, areas, n } = this;
     let orient = 0;
     for (let i = 0; i < n; i++) {
       const rp = this.rowPrev[i], rn = this.rowNext[i];
       let cp = this.colPrev[i], cn = this.colNext[i];
+      areas[i] = 0;
       if (rp < 0 || rn < 0 || (cp < 0 && cn < 0)) { normals[i * 3] = normals[i * 3 + 1] = normals[i * 3 + 2] = 0; continue; }
+      // Each difference spans two stitches where both neighbours exist and one
+      // at the first and last rounds, so the patch is the cross product scaled
+      // by however far the two differences actually reach.
+      const span = (cp < 0 || cn < 0) ? 2 : 4;
       if (cp < 0) cp = i;
       if (cn < 0) cn = i;
       const tx = pos[rn * 3] - pos[rp * 3], ty = pos[rn * 3 + 1] - pos[rp * 3 + 1], tz = pos[rn * 3 + 2] - pos[rp * 3 + 2];
       const ux = pos[cn * 3] - pos[cp * 3], uy = pos[cn * 3 + 1] - pos[cp * 3 + 1], uz = pos[cn * 3 + 2] - pos[cp * 3 + 2];
       let nx = ty * uz - tz * uy, ny = tz * ux - tx * uz, nz = tx * uy - ty * ux;
       const len = Math.sqrt(nx * nx + ny * ny + nz * nz) + 1e-9;
+      areas[i] = len / span;
       nx /= len; ny /= len; nz /= len;
       normals[i * 3] = nx; normals[i * 3 + 1] = ny; normals[i * 3 + 2] = nz;
       orient += nx * pos[i * 3] + ny * pos[i * 3 + 1] + nz * pos[i * 3 + 2];
@@ -185,15 +255,39 @@ export class Simulation {
     if (orient < 0) for (let i = 0; i < n * 3; i++) normals[i] = -normals[i];
   }
 
+  /** How much of a closed body the fabric currently makes, from 0 for a shape
+   *  with no inside to 1 for a sphere: the volume the surface encloses against
+   *  the most any surface of that area could enclose. Stuffing works on the
+   *  air a shape holds, so a piece that holds none cannot be stuffed. */
+  enclosure(): number {
+    const { pos, normals, areas, n } = this;
+    this.computeNormals();
+    let volume = 0;
+    let area = 0;
+    for (let i = 0; i < n; i++) {
+      volume += (pos[i * 3] * normals[i * 3] + pos[i * 3 + 1] * normals[i * 3 + 1] + pos[i * 3 + 2] * normals[i * 3 + 2]) * areas[i];
+      area += areas[i];
+    }
+    volume /= 3;
+    if (area <= 0) return 0;
+    const sphere = Math.pow(area, 1.5) / (6 * Math.sqrt(Math.PI));
+    return Math.max(0, Math.min(1, volume / sphere));
+  }
+
   step() {
     const { pos, vel, force, n } = this;
     const { dt, damping, springK, repelK, repelRadius, pressure } = this.params;
     force.fill(0);
 
-    // Stuffing: push each stitch outward along the surface normal.
+    // Stuffing: push each stitch outward along the surface normal, as hard as
+    // the shape has an inside to hold it.
     if (pressure > 0) {
-      this.computeNormals();
-      for (let i = 0; i < n * 3; i++) force[i] += pressure * this.normals[i];
+      // Also refreshes the normals the push itself follows.
+      const held = this.enclosure();
+      this.held = this.held < 0 ? held : this.held + 0.02 * (held - this.held);
+      const t = Math.max(0, Math.min(1, (this.held - 0.05) / 0.15));
+      this.stuffable = t * t * (3 - 2 * t);
+      if (this.stuffable > 0) this.addPressure(pressure * this.stuffable);
     }
 
     // Springs

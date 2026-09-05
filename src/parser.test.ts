@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parsePattern, roundStitchCount } from './parser';
 import { buildGraph } from './graph';
+import { Simulation } from './sim';
 
 function counts(text: string): number[] {
   const { rounds } = parsePattern(text);
@@ -93,5 +94,39 @@ describe('buildGraph', () => {
     // A shear spring spans at most a couple of stitches; nothing should need more.
     expect(Math.max(...cross.map((e) => e.rest))).toBeLessThan(2.5);
     expect(Math.max(...g.edges.map((e) => e.rest))).toBeLessThan(3);
+  });
+});
+
+describe('Simulation', () => {
+  const SPHERE = `R1: 6 sc in MR\nR2: inc x6\nR3: (sc, inc) x6\nR4: (2 sc, inc) x6\nR5-8: sc around\nR9: (2 sc, dec) x6\nR10: (sc, dec) x6\nR11: dec x6`;
+  const RUFFLE = `R1: 6 sc in MR\nR2: inc x6\nR3: inc x12\nR4: inc x24\nR5: inc x48`;
+
+  const settle = (pattern: string, pressure: number) => {
+    const sim = new Simulation(buildGraph(parsePattern(pattern).rounds), { pressure });
+    for (let i = 0; i < 2000; i++) sim.step();
+    return sim;
+  };
+
+  it('tells a shape that holds air from one that does not', () => {
+    expect(settle(SPHERE, 0.6).enclosure()).toBeGreaterThan(0.7);
+    expect(settle(RUFFLE, 0.6).enclosure()).toBeLessThan(0.2);
+  });
+
+  it('comes to rest when a shape with no inside is stuffed', () => {
+    // Stuffing a ruffle used to drive it around for ever, because pressure on
+    // an open surface has a large net force and nothing to push against.
+    const loose = settle(RUFFLE, 0);
+    const stuffed = settle(RUFFLE, 1.8);
+    expect(stuffed.stuffable).toBeLessThan(0.05);
+    expect(stuffed.energy).toBeLessThan(Math.max(1e-5, loose.energy * 50));
+  });
+
+  it('still rounds out a closed shape', () => {
+    const loose = settle(SPHERE, 0);
+    const stuffed = settle(SPHERE, 0.6);
+    expect(stuffed.stuffable).toBe(1);
+    expect(stuffed.enclosure()).toBeGreaterThan(loose.enclosure());
+    expect(stuffed.enclosure()).toBeGreaterThan(0.95);
+    expect(stuffed.energy).toBeLessThan(1e-6);
   });
 });

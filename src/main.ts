@@ -60,6 +60,20 @@ R2: inc x6
 R3: inc x12
 R4: inc x24
 R5: inc x48`,
+  // Nine increases a round where six would lie flat: just enough surplus that
+  // the waves build up a round at a time instead of crumpling all at once.
+  'Frill (gentle ruffle)': `R1: 9 sc in MR
+R2: inc x9 (18)
+R3: (sc, inc) x9 (27)
+R4: (2 sc, inc) x9 (36)
+R5: (3 sc, inc) x9 (45)
+R6: (4 sc, inc) x9 (54)
+R7: (5 sc, inc) x9 (63)
+R8: (6 sc, inc) x9 (72)
+R9: (7 sc, inc) x9 (81)
+R10: (8 sc, inc) x9 (90)
+R11: (9 sc, inc) x9 (99)
+R12: (10 sc, inc) x9 (108)`,
 };
 
 const patternEl = document.getElementById('pattern') as HTMLTextAreaElement;
@@ -71,6 +85,7 @@ const roundsEl = document.getElementById('rounds') as HTMLTableElement;
 const viewEl = document.getElementById('view') as HTMLElement;
 const stuffingEl = document.getElementById('stuffing') as HTMLInputElement;
 const stuffingValueEl = document.getElementById('stuffingValue') as HTMLSpanElement;
+const stuffingNoteEl = document.getElementById('stuffingNote') as HTMLDivElement;
 
 /** Base pressure applied when the slider reads 1. */
 const PRESSURE_UNIT = 0.6;
@@ -80,7 +95,18 @@ function applyStuffing() {
   if (!sim) return;
   const v = parseFloat(stuffingEl.value);
   sim.params.pressure = v * PRESSURE_UNIT;
+  showStuffing();
+}
+
+/** Stuffing pushes on the air a shape holds, so a piece with no inside — a
+ *  flat circle, a ruffle — takes none however far the slider goes. Say so
+ *  rather than leaving the slider looking broken. */
+function showStuffing() {
+  if (!sim) return;
+  const v = parseFloat(stuffingEl.value);
   stuffingValueEl.textContent = v.toFixed(1);
+  const note = v > 0 && sim.stuffable < 0.05 ? 'This shape has no inside to fill.' : '';
+  if (stuffingNoteEl.textContent !== note) stuffingNoteEl.textContent = note;
 }
 stuffingEl.addEventListener('input', () => { stuffingTouched = true; applyStuffing(); });
 
@@ -144,6 +170,7 @@ function loop() {
   if (sim && running) {
     for (let i = 0; i < sim.params.stepsPerFrame; i++) sim.step();
     renderer.update();
+    showStuffing();
   }
   renderer.render();
 }
