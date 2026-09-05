@@ -5,7 +5,7 @@
 // has some thickness. The shape (sphere, cone, tube...) emerges from the
 // pattern's increases and decreases alone.
 
-import { DIMS, ringRadius, ringStep, type StitchGraph } from './graph';
+import { DIMS, ringRadius, ringRise, ringStep, type StitchGraph } from './graph';
 
 export interface SimParams {
   dt: number;
@@ -92,21 +92,37 @@ export class Simulation {
   /** Lay each round out as a circle whose circumference matches its stitch
    *  count, stepping up by however much height is left after the change in
    *  radius. This makes the start a surface of revolution close to the final
-   *  shape: flat pieces start flat, tubes start as tubes, spheres as spheres. */
+   *  shape: flat pieces start flat, tubes start as tubes, spheres as spheres.
+   *
+   *  A round can only lean out by one stitch height per round, so a pattern
+   *  that increases faster than that gets a ring too small to hold its
+   *  stitches. That surplus is what ruffles, and it is laid out as a wave
+   *  deep enough to take up the extra length — a fold for the relaxation to
+   *  grow, rather than a perfectly symmetric ring it would have to buckle. */
   private initialLayout() {
     const { nodes, rounds } = this.graph;
     let y = 0;
     let prevRadius = 0;
     const angleOf = new Float32Array(this.n);
+    const lobes = this.ruffleLobes();
     for (const r of rounds) {
       const count = r.count;
       if (count === 0) continue;
       const first = nodes[r.start];
       const h = DIMS[first.kind].h;
-      const radius = ringRadius(count, DIMS[first.kind].w);
+      const w = DIMS[first.kind].w;
+      const nominal = ringRadius(count, w);
+      // The magic ring's centre is a point, not a ring, so the first round is
+      // free to sit at whatever radius its stitch count asks for.
+      const radius = prevRadius > 0 ? prevRadius + ringRise(prevRadius, nominal, h) : nominal;
       // Keep a small step so coincident rings do not start exactly on top of each other.
-      y += Math.max(0.05 * h, ringStep(prevRadius, radius, h));
+      y += Math.max(0.05 * h, ringStep(prevRadius, nominal, h));
       prevRadius = radius;
+      // Extra arc length a wave of `lobes` folds must absorb to fit the round
+      // on a ring this size: a sine of amplitude A stretches the circumference
+      // by about (A * lobes)^2 / (4 * radius^2).
+      const surplus = count * w / (2 * Math.PI * radius) - 1;
+      const amp = surplus > 0 ? (2 * radius * Math.sqrt(surplus)) / lobes : 0;
       // Start the round at the angle of its first parent so stitches sit above their parents.
       let a0 = 0;
       const fp = first.parents[0];
@@ -116,7 +132,7 @@ export class Simulation {
         const a = a0 + (i / count) * Math.PI * 2;
         angleOf[id] = a;
         this.pos[id * 3] = Math.cos(a) * radius + (Math.random() - 0.5) * 0.05;
-        this.pos[id * 3 + 1] = y + (Math.random() - 0.5) * 0.05;
+        this.pos[id * 3 + 1] = y + amp * Math.sin(lobes * a) + (Math.random() - 0.5) * 0.05;
         this.pos[id * 3 + 2] = Math.sin(a) * radius + (Math.random() - 0.5) * 0.05;
       }
     }
@@ -126,6 +142,25 @@ export class Simulation {
       this.pos[nd.id * 3] = 0; this.pos[nd.id * 3 + 1] = top ? y + 0.3 : 0.3; this.pos[nd.id * 3 + 2] = 0;
     }
     this.recenter();
+  }
+
+  /** How many folds to start a ruffled piece with. Fabric folds on a
+   *  wavelength of roughly a dozen stitches, measured on the widest round
+   *  that has more stitches than its ring can hold; a piece that ruffles
+   *  nowhere never uses this. */
+  private ruffleLobes(): number {
+    const { nodes, rounds } = this.graph;
+    let widest = 0;
+    let prevRadius = 0;
+    for (const r of rounds) {
+      if (r.count === 0) continue;
+      const { w, h } = DIMS[nodes[r.start].kind];
+      const nominal = ringRadius(r.count, w);
+      const radius = prevRadius > 0 ? prevRadius + ringRise(prevRadius, nominal, h) : nominal;
+      if (radius < nominal) widest = Math.max(widest, r.count);
+      prevRadius = radius;
+    }
+    return Math.min(16, Math.max(3, Math.round(widest / 12)));
   }
 
   /** Estimate a unit normal per stitch from its row and column neighbours,

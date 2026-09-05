@@ -20,7 +20,10 @@ npm run build    # typecheck + production bundle in dist/
 2. `src/graph.ts` builds a graph: one node per stitch, springs to the stitches
    either side in the round and to the stitch(es) it was worked into, plus
    weaker shear and bending springs. Rest lengths come from stitch dimensions
-   and local ring geometry, so increases and decreases create curvature.
+   and local ring geometry, so increases and decreases create curvature. A
+   round can only lean out by one stitch height, so a pattern that increases
+   faster than that (doubling every round, say) makes surplus fabric that
+   ruffles rather than springs that stretch.
 3. `src/sim.ts` relaxes the graph in 3D: springs, short-range repulsion so the
    fabric has thickness, and optional outward pressure along the surface
    normal to model stuffing.

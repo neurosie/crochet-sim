@@ -82,4 +82,16 @@ describe('buildGraph', () => {
     expect(r2.length).toBe(3);
     expect(r2.every((n) => n.parents.length === 2)).toBe(true);
   });
+
+  it('keeps rest lengths short when a pattern increases faster than it can lie flat', () => {
+    // Doubling every round makes hyperbolic fabric. A stitch is still only a
+    // stitch long, however far apart the rounds' nominal ring radii are: the
+    // surplus has to show up as ruffling, not as stretched springs.
+    const g = buildGraph(parsePattern(`R1: 6 sc in MR\nR2: inc x6\nR3: inc x12\nR4: inc x24\nR5: inc x48`).rounds);
+    const cross = g.edges.filter((e) => e.kind === 'col' || e.kind === 'shear');
+    expect(cross.length).toBeGreaterThan(0);
+    // A shear spring spans at most a couple of stitches; nothing should need more.
+    expect(Math.max(...cross.map((e) => e.rest))).toBeLessThan(2.5);
+    expect(Math.max(...g.edges.map((e) => e.rest))).toBeLessThan(3);
+  });
 });

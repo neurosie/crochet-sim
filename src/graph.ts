@@ -62,19 +62,30 @@ export function ringRadius(count: number, w: number): number {
   return w / (2 * Math.sin(Math.PI / count));
 }
 
+/** How much a round's radius can actually differ from the previous round's.
+ *  A stitch of height h reaches h along the fabric, so it can lean outward by
+ *  at most h no matter how many stitches the round has. A round that asks for
+ *  more radius than that — doubling every round, say — is making fabric that
+ *  no cone can hold: the surplus circumference has to ruffle, and must not be
+ *  mistaken for distance between a stitch and its parent. */
+export function ringRise(rp: number, rc: number, h: number): number {
+  return Math.max(-h, Math.min(h, rc - rp));
+}
+
 /** Straight-line distance between a point on a ring of radius rp and a point
- *  on the next ring of radius rc, separated by angle dTheta, when the rings
- *  are a slant distance h apart along the fabric. */
+ *  on the next ring, separated by angle dTheta, when the rings are a slant
+ *  distance h apart along the fabric. */
 function ringDistance(rp: number, rc: number, dTheta: number, h: number): number {
+  const re = rp + ringRise(rp, rc, h);
   const dy = ringStep(rp, rc, h);
-  return Math.sqrt(Math.max(0, rp * rp + rc * rc - 2 * rp * rc * Math.cos(dTheta) + dy * dy));
+  return Math.sqrt(Math.max(0, rp * rp + re * re - 2 * rp * re * Math.cos(dTheta) + dy * dy));
 }
 
 /** Axial distance between two consecutive rings a slant distance h apart.
  *  Zero when the radius changes faster than the stitch height allows, which
  *  is the fabric ruffling. */
 export function ringStep(rp: number, rc: number, h: number): number {
-  const dr = rc - rp;
+  const dr = ringRise(rp, rc, h);
   return Math.sqrt(Math.max(0, h * h - dr * dr));
 }
 
@@ -107,9 +118,9 @@ export function buildGraph(rounds: Round[], options: GraphOptions = {}): StitchG
 
   let prev: number[] = [];
   let center: number | undefined;
-  // Per-round ring radius and axial step, and per-node angular offset from
-  // its first parent, used for rest lengths that span two rounds.
-  const ringR: number[] = [];
+  // Per-round change in ring radius and axial step, and per-node angular
+  // offset from its first parent, used for rest lengths that span two rounds.
+  const ringDr: number[] = [];
   const ringDy: number[] = [];
   const thetaOff: number[] = [];
 
@@ -250,7 +261,9 @@ export function buildGraph(rounds: Round[], options: GraphOptions = {}): StitchG
     const rc = ringRadius(cur.length, curW);
     const rp = prev.length ? ringRadius(prev.length, DIMS[nodes[prev[0]].kind].w) : 0;
     const dThetaPerParent = prev.length ? (2 * Math.PI) / prev.length : 0;
-    ringR[rIndex] = rc;
+    // The first round hangs off the magic ring's centre point rather than a
+    // ring, so it sits at its full radius however big it is.
+    ringDr[rIndex] = !cur.length ? 0 : prev.length ? ringRise(rp, rc, DIMS[nodes[cur[0]].kind].h) : rc;
     ringDy[rIndex] = cur.length ? ringStep(rp, rc, DIMS[nodes[cur[0]].kind].h) : 0;
     for (const id of cur) {
       const n = nodes[id];
@@ -282,10 +295,14 @@ export function buildGraph(rounds: Round[], options: GraphOptions = {}): StitchG
       const par = n.parents[0];
       const gp = nodes[par].parents[0];
       if (gp !== undefined && nodes[gp].kind !== 'center') {
-        const rgp = ringR[nodes[gp].round];
+        // Radii measured outward from the parent's round, so that two rounds
+        // of ruffling fabric stay two stitch heights apart rather than being
+        // stretched across the radius the pattern nominally asks for.
+        const re = rp + ringDr[rIndex];
+        const rgp = rp - ringDr[nodes[par].round];
         const dth = thetaOff[id] + thetaOff[par];
         const dy = ringDy[rIndex] + ringDy[nodes[par].round];
-        addEdge(id, gp, Math.sqrt(Math.max(0, rgp * rgp + rc * rc - 2 * rgp * rc * Math.cos(dth) + dy * dy)), K_BEND, 'bend');
+        addEdge(id, gp, Math.sqrt(Math.max(0, rgp * rgp + re * re - 2 * rgp * re * Math.cos(dth) + dy * dy)), K_BEND, 'bend');
       }
     }
 
