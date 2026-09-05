@@ -10,12 +10,8 @@
     <div id="app">
       <aside id="panel">
         <h1>Crochet Sim</h1>
-        <label for="pattern">Pattern (one round per line)</label>
-        <textarea id="pattern" spellcheck="false"></textarea>
         <div class="row">
-          <button id="run">Simulate</button>
-          <button id="toggle">Pause</button>
-          <button id="fit" title="Centre the piece in the view">Fit</button>
+          <label for="presets">Preset</label>
           <select id="presets"></select>
         </div>
         <div class="row">
@@ -24,6 +20,13 @@
           <span id="stuffingValue">auto</span>
         </div>
         <div id="stuffingNote"></div>
+        <div class="row">
+          <button id="run">Simulate</button>
+          <button id="toggle">Pause</button>
+          <button id="recenter" title="Centre the piece in the view">Recenter</button>
+        </div>
+        <label for="pattern">Pattern (one round per line)</label>
+        <textarea id="pattern" spellcheck="false"></textarea>
         <div id="messages"></div>
         <table id="rounds"></table>
         <details>

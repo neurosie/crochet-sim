@@ -30,7 +30,8 @@ npm run build    # typecheck + production bundle in dist/
    scales with how much of a closed body the fabric makes and does nothing at
    all to something with no inside, like a flat circle or a ruffle.
 4. `src/render.ts` draws it with Three.js. Drag to orbit, scroll to zoom; on a
-   touch screen, one finger orbits and two pinch and pan. "Fit" recentres.
+   touch screen, one finger orbits and two pinch and pan. "Recenter" puts the
+   whole piece back in view.
 
 On a narrow screen the shape takes the top of the window and stays there while
 the pattern and the round table scroll underneath it.
