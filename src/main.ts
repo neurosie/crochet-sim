@@ -55,6 +55,16 @@ R4: (2 sc, inc) x6
 R5: (3 sc, inc) x6
 R6: (4 sc, inc) x6
 R7-12: sc around`,
+  // An increase and a decrease on opposite sides of the same round keep the
+  // count at 12 but lengthen one side of the tube and shorten the other, so
+  // the body curves. Eighteen such rounds bend it about 120 degrees.
+  'Banana': `R1: 6 sc in MR
+R2: (sc, inc) x3 (9)
+R3: (2 sc, inc) x3 (12)
+R4-21: inc, 4 sc, dec, 5 sc (12)
+R22: (2 sc, dec) x3 (9)
+R23: (sc, dec) x3 (6)
+R24-26: sc around (6)`,
   'Ruffle (hyperbolic)': `R1: 6 sc in MR
 R2: inc x6
 R3: inc x12

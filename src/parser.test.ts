@@ -97,6 +97,39 @@ describe('buildGraph', () => {
   });
 });
 
+describe('shaping within a round', () => {
+  const BODY = 'inc, 4 sc, dec, 5 sc';
+
+  it('an increase and a decrease in one round leave the count alone', () => {
+    // The increase eats one stitch and makes two, the decrease eats two and
+    // makes one, so the round has to consume all twelve parents to come out
+    // at twelve again. Off-by-one here silently drops a stitch a round.
+    const g = buildGraph(parsePattern(`R1: 6 sc in MR\nR2: inc x6\nR3-6: ${BODY}`).rounds);
+    expect(g.rounds.map((r) => r.count)).toEqual([6, 12, 12, 12, 12, 12]);
+    expect(g.messages).toEqual([]);
+  });
+
+  it('bends the tube it is worked on', () => {
+    const g = buildGraph(parsePattern(`R1: 6 sc in MR\nR2: inc x6\nR3-14: ${BODY}`).rounds);
+    const sim = new Simulation(g, { pressure: 0.6 });
+    for (let i = 0; i < 2500; i++) sim.step();
+    const mid = g.rounds[Math.floor(g.rounds.length / 2)];
+    const ends = [g.rounds[1], g.rounds[g.rounds.length - 1]];
+    const centre = (r: { start: number; count: number }) => {
+      let x = 0, y = 0, z = 0;
+      for (let i = 0; i < r.count; i++) { x += sim.pos[(r.start + i) * 3]; y += sim.pos[(r.start + i) * 3 + 1]; z += sim.pos[(r.start + i) * 3 + 2]; }
+      return [x / r.count, y / r.count, z / r.count];
+    };
+    const [a, b] = ends.map(centre);
+    const m = centre(mid);
+    // The middle of a curved tube stands well off the line joining its ends.
+    const span = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+    const t = ((m[0] - a[0]) * (b[0] - a[0]) + (m[1] - a[1]) * (b[1] - a[1]) + (m[2] - a[2]) * (b[2] - a[2])) / (span * span);
+    const off = Math.hypot(m[0] - a[0] - t * (b[0] - a[0]), m[1] - a[1] - t * (b[1] - a[1]), m[2] - a[2] - t * (b[2] - a[2]));
+    expect(off / span).toBeGreaterThan(0.1);
+  });
+});
+
 describe('Simulation', () => {
   const SPHERE = `R1: 6 sc in MR\nR2: inc x6\nR3: (sc, inc) x6\nR4: (2 sc, inc) x6\nR5-8: sc around\nR9: (2 sc, dec) x6\nR10: (sc, dec) x6\nR11: dec x6`;
   const RUFFLE = `R1: 6 sc in MR\nR2: inc x6\nR3: inc x12\nR4: inc x24\nR5: inc x48`;
