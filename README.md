@@ -29,6 +29,10 @@ npm run build    # typecheck + production bundle in dist/
    normal to model stuffing. Stuffing pushes on the air the piece holds, so it
    scales with how much of a closed body the fabric makes and does nothing at
    all to something with no inside, like a flat circle or a ruffle.
-4. `src/render.ts` draws it with Three.js. Drag to orbit, scroll to zoom.
+4. `src/render.ts` draws it with Three.js. Drag to orbit, scroll to zoom; on a
+   touch screen, one finger orbits and two pinch and pan. "Fit" recentres.
+
+On a narrow screen the shape takes the top of the window and stays there while
+the pattern and the round table scroll underneath it.
 
 Units: a single crochet is 1 wide and 0.95 tall. Other stitches scale from that.

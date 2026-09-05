@@ -1,7 +1,7 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; font-family: system-ui, sans-serif; background: #1a1a1f; color: #e6e6ea; }
-#app { display: flex; height: 100vh; }
-#panel { width: 340px; padding: 14px; overflow-y: auto; background: #232329; border-right: 1px solid #333; display: flex; flex-direction: column; gap: 10px; }
+#app { display: flex; height: 100vh; height: 100dvh; }
+#panel { width: 340px; min-width: 0; padding: 14px; overflow-y: auto; background: #232329; border-right: 1px solid #333; display: flex; flex-direction: column; gap: 10px; }
 /* The panel scrolls as a whole, so nothing inside it should be squeezed to
    make room for anything else: a long pattern's round table would otherwise
    flatten the textarea above it to a single line. */
@@ -9,7 +9,9 @@ html, body { margin: 0; height: 100%; font-family: system-ui, sans-serif; backgr
 #panel h1 { font-size: 18px; margin: 0 0 4px; }
 #panel label { font-size: 12px; color: #aaa; }
 #pattern { width: 100%; height: 220px; font-family: ui-monospace, monospace; font-size: 13px; background: #15151a; color: #eee; border: 1px solid #444; border-radius: 4px; padding: 8px; resize: vertical; }
-.row { display: flex; gap: 6px; align-items: center; }
+/* Wraps so the preset menu drops to its own line rather than being squeezed
+   to nothing when the panel is narrow. */
+.row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 button { background: #4c6ef5; color: white; border: 0; border-radius: 4px; padding: 6px 12px; cursor: pointer; font-size: 13px; }
 button:hover { background: #5c7cfa; }
 button#toggle { background: #444; }
@@ -19,10 +21,54 @@ select { background: #15151a; color: #eee; border: 1px solid #444; border-radius
 #messages { font-size: 12px; white-space: pre-wrap; }
 #messages .error { color: #ff6b6b; }
 #messages .warn { color: #ffd43b; }
-#rounds { font-size: 12px; border-collapse: collapse; width: 100%; }
+/* Fixed layout so a long round description wraps instead of setting the
+   table's minimum width — otherwise a wide pattern drags the whole panel
+   wider than the screen, which on a phone means the page scrolls sideways. */
+#rounds { font-size: 12px; border-collapse: collapse; width: 100%; table-layout: fixed; }
 #rounds td, #rounds th { padding: 2px 6px; text-align: left; border-bottom: 1px solid #333; }
+#rounds th:nth-child(1) { width: 5.5em; }
+#rounds th:nth-child(2) { width: 3.2em; }
 #rounds td:nth-child(2) { text-align: right; font-variant-numeric: tabular-nums; }
+#rounds td:nth-child(3) { overflow-wrap: anywhere; }
 details { font-size: 12px; color: #aaa; }
-details pre { font-size: 11px; background: #15151a; padding: 8px; border-radius: 4px; }
-#view { flex: 1; position: relative; }
+details pre { font-size: 11px; background: #15151a; padding: 8px; border-radius: 4px; overflow-x: auto; }
+/* min-width/min-height 0 so the view can shrink: a flex item will not go below
+   its content's size, and the canvas counts as content, so without this the
+   canvas ratchets the view wider and squeezes the panel next to it. overflow
+   hidden covers the frame between a resize and the canvas catching up. */
+#view { flex: 1; position: relative; min-width: 0; min-height: 0; overflow: hidden; }
 #view canvas { display: block; }
+
+/* Phones and narrow windows. The shape is the point, so it takes the top of
+   the screen and stays there while the pattern, the controls and the round
+   table scroll underneath — the model is always in view while you edit. */
+@media (max-width: 760px) {
+  html, body { height: auto; }
+  #app { flex-direction: column; height: auto; min-height: 100dvh; }
+  #view {
+    order: -1; flex: 0 0 auto; height: 52dvh; min-height: 220px;
+    position: sticky; top: 0; z-index: 1;
+    background: #1a1a1f; border-bottom: 1px solid #333;
+  }
+  #panel { width: 100%; overflow: visible; border-right: 0; padding: 12px; gap: 12px; }
+  #panel h1 { font-size: 16px; }
+  #pattern { height: 30dvh; min-height: 150px; font-size: 14px; }
+  /* Room for a fingertip on the controls. */
+  .row { gap: 8px; }
+  button { padding: 10px 16px; font-size: 14px; }
+  select { padding: 9px 6px; font-size: 14px; min-width: 10em; }
+  #stuffing { flex: 1; min-width: 8em; height: 28px; }
+  #rounds { font-size: 13px; }
+  #rounds td, #rounds th { padding: 6px; }
+  details summary { padding: 6px 0; }
+}
+
+/* Landscape on a phone is too short to stack: a 52dvh view would be a
+   letterbox. Keep the panel beside the shape and just narrow it. */
+@media (max-width: 760px) and (orientation: landscape) {
+  html, body { height: 100%; }
+  #app { flex-direction: row; height: 100dvh; min-height: 0; }
+  #view { order: 0; flex: 1; height: auto; min-height: 0; position: static; border-bottom: 0; }
+  #panel { width: 42%; max-width: 300px; overflow-y: auto; border-right: 1px solid #333; }
+  #pattern { height: 30dvh; min-height: 90px; }
+}

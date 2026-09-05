@@ -41,12 +41,16 @@ export class Renderer {
     dir.position.set(5, 10, 7);
     this.scene.add(dir);
 
-    window.addEventListener('resize', () => this.resize());
+    // The view's own box changes without the window doing so — the address bar
+    // sliding away on a phone, or the panel reflowing beside it — so watch the
+    // container rather than the window.
+    new ResizeObserver(() => this.resize()).observe(container);
     this.resize();
   }
 
   private resize() {
     const w = this.container.clientWidth, h = this.container.clientHeight;
+    if (w === 0 || h === 0) return;
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h);
@@ -87,7 +91,11 @@ export class Renderer {
   frame() {
     if (!this.sim) return;
     const r = Math.max(3, this.sim.extent() * 1.4);
-    const dist = r / Math.tan((this.camera.fov * Math.PI) / 360);
+    // The field of view is the vertical one, so on a view taller than it is
+    // wide — a phone held upright — it is the width that has to fit.
+    const halfV = (this.camera.fov * Math.PI) / 360;
+    const halfH = Math.atan(Math.tan(halfV) * this.camera.aspect);
+    const dist = r / Math.tan(Math.min(halfV, halfH));
     this.camera.position.set(0, dist * 0.35, dist);
     this.controls.target.set(0, 0, 0);
     this.controls.update();

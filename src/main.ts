@@ -91,6 +91,7 @@ R12: (10 sc, inc) x9 (108)`,
 const patternEl = document.getElementById('pattern') as HTMLTextAreaElement;
 const runBtn = document.getElementById('run') as HTMLButtonElement;
 const toggleBtn = document.getElementById('toggle') as HTMLButtonElement;
+const fitBtn = document.getElementById('fit') as HTMLButtonElement;
 const presetsEl = document.getElementById('presets') as HTMLSelectElement;
 const messagesEl = document.getElementById('messages') as HTMLDivElement;
 const roundsEl = document.getElementById('rounds') as HTMLTableElement;
@@ -174,6 +175,8 @@ function run() {
 }
 
 runBtn.addEventListener('click', run);
+// Pinching and dragging can leave the piece off screen with no way back.
+fitBtn.addEventListener('click', () => renderer.frame());
 toggleBtn.addEventListener('click', () => { running = !running; toggleBtn.textContent = running ? 'Pause' : 'Resume'; });
 patternEl.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') run(); });
 
