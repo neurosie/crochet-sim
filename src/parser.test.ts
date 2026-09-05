@@ -97,36 +97,90 @@ describe('buildGraph', () => {
   });
 });
 
-describe('shaping within a round', () => {
-  const BODY = 'inc, 4 sc, dec, 5 sc';
+describe('curving a tube', () => {
+  const centres = (sim: Simulation, rs: { start: number; count: number }[]) =>
+    rs.map((r) => {
+      let x = 0, y = 0, z = 0;
+      for (let i = 0; i < r.count; i++) { x += sim.pos[(r.start + i) * 3]; y += sim.pos[(r.start + i) * 3 + 1]; z += sim.pos[(r.start + i) * 3 + 2]; }
+      return [x / r.count, y / r.count, z / r.count];
+    });
+
+  const settle = (pattern: string) => {
+    const graph = buildGraph(parsePattern(pattern).rounds);
+    const sim = new Simulation(graph, { pressure: 0.6 });
+    for (let i = 0; i < 3000; i++) sim.step();
+    return { graph, sim };
+  };
+
+  /** Sagitta over chord of the centreline: 0 dead straight, 0.13 a 60 degree
+   *  arc, 0.21 ninety degrees. */
+  const bow = (sim: Simulation, rs: { start: number; count: number }[]) => {
+    const c = centres(sim, rs);
+    const [a, b, m] = [c[0], c[c.length - 1], c[Math.floor(c.length / 2)]];
+    const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    const span = Math.hypot(...ab);
+    const t = ((m[0] - a[0]) * ab[0] + (m[1] - a[1]) * ab[1] + (m[2] - a[2]) * ab[2]) / (span * span);
+    return Math.hypot(m[0] - a[0] - t * ab[0], m[1] - a[1] - t * ab[1], m[2] - a[2] - t * ab[2]) / span;
+  };
+
+  /** How far the fabric rotates around the tube from one round to the next,
+   *  in degrees: the spiral you see as a barber pole up the piece. */
+  const windPerRound = (sim: Simulation, rs: { start: number; count: number }[]) => {
+    const c = centres(sim, rs);
+    const norm = (v: number[]) => { const l = Math.hypot(...v) || 1; return v.map((x) => x / l); };
+    let total = 0, n = 0;
+    for (let i = 0; i + 1 < rs.length; i++) {
+      const axis = norm([c[i + 1][0] - c[i][0], c[i + 1][1] - c[i][1], c[i + 1][2] - c[i][2]]);
+      const spoke = (r: { start: number }, k: number) => {
+        const d = [sim.pos[r.start * 3] - c[k][0], sim.pos[r.start * 3 + 1] - c[k][1], sim.pos[r.start * 3 + 2] - c[k][2]];
+        const al = d[0] * axis[0] + d[1] * axis[1] + d[2] * axis[2];
+        return norm([d[0] - al * axis[0], d[1] - al * axis[1], d[2] - al * axis[2]]);
+      };
+      const u = spoke(rs[i], i), v = spoke(rs[i + 1], i + 1);
+      const cross = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+      const sign = Math.sign(cross[0] * axis[0] + cross[1] * axis[1] + cross[2] * axis[2]);
+      total += (sign * Math.acos(Math.max(-1, Math.min(1, u[0] * v[0] + u[1] * v[1] + u[2] * v[2]))) * 180) / Math.PI;
+      n++;
+    }
+    return total / Math.max(1, n);
+  };
+
+  const TUBE = 'R1: 6 sc in MR\nR2: inc x6 (12)\n';
+
+  it('taller stitches down one side bend it, without twisting the stitches', () => {
+    // A half-round of half-double crochet is taller than the half-round of
+    // single crochet opposite, so that side of the tube is longer and the
+    // body curves away from it. Nothing changes the stitch count, so no
+    // fabric is dragged around the tube and the columns stay vertical.
+    const { graph, sim } = settle(`${TUBE}R3-16: 6 hdc, 6 sc (12)`);
+    const body = graph.rounds.filter((r) => r.count === 12);
+    expect(graph.messages).toEqual([]);
+    expect(bow(sim, body)).toBeGreaterThan(0.12);
+    expect(Math.abs(windPerRound(sim, body))).toBeLessThan(2);
+  });
+
+  it('a plain tube stays straight', () => {
+    const { graph, sim } = settle(`${TUBE}R3-16: sc around (12)`);
+    const body = graph.rounds.filter((r) => r.count === 12);
+    expect(bow(sim, body)).toBeLessThan(0.05);
+  });
 
   it('an increase and a decrease in one round leave the count alone', () => {
     // The increase eats one stitch and makes two, the decrease eats two and
     // makes one, so the round has to consume all twelve parents to come out
     // at twelve again. Off-by-one here silently drops a stitch a round.
-    const g = buildGraph(parsePattern(`R1: 6 sc in MR\nR2: inc x6\nR3-6: ${BODY}`).rounds);
+    const g = buildGraph(parsePattern(`${TUBE}R3-6: inc, 4 sc, dec, 5 sc`).rounds);
     expect(g.rounds.map((r) => r.count)).toEqual([6, 12, 12, 12, 12, 12]);
     expect(g.messages).toEqual([]);
   });
 
-  it('bends the tube it is worked on', () => {
-    const g = buildGraph(parsePattern(`R1: 6 sc in MR\nR2: inc x6\nR3-14: ${BODY}`).rounds);
-    const sim = new Simulation(g, { pressure: 0.6 });
-    for (let i = 0; i < 2500; i++) sim.step();
-    const mid = g.rounds[Math.floor(g.rounds.length / 2)];
-    const ends = [g.rounds[1], g.rounds[g.rounds.length - 1]];
-    const centre = (r: { start: number; count: number }) => {
-      let x = 0, y = 0, z = 0;
-      for (let i = 0; i < r.count; i++) { x += sim.pos[(r.start + i) * 3]; y += sim.pos[(r.start + i) * 3 + 1]; z += sim.pos[(r.start + i) * 3 + 2]; }
-      return [x / r.count, y / r.count, z / r.count];
-    };
-    const [a, b] = ends.map(centre);
-    const m = centre(mid);
-    // The middle of a curved tube stands well off the line joining its ends.
-    const span = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
-    const t = ((m[0] - a[0]) * (b[0] - a[0]) + (m[1] - a[1]) * (b[1] - a[1]) + (m[2] - a[2]) * (b[2] - a[2])) / (span * span);
-    const off = Math.hypot(m[0] - a[0] - t * (b[0] - a[0]), m[1] - a[1] - t * (b[1] - a[1]), m[2] - a[2] - t * (b[2] - a[2]));
-    expect(off / span).toBeGreaterThan(0.1);
+  it('but shaping a curve that way spirals the fabric', () => {
+    // Why the banana uses stitch height instead: between the increase and the
+    // decrease the fabric sits a stitch ahead of the round below, so every
+    // round rotates a fraction of a stitch and the columns wind visibly.
+    const { graph, sim } = settle(`${TUBE}R3-16: inc, 4 sc, dec, 5 sc (12)`);
+    const body = graph.rounds.filter((r) => r.count === 12);
+    expect(Math.abs(windPerRound(sim, body))).toBeGreaterThan(8);
   });
 });
 
