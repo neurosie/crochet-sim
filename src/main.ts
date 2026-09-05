@@ -99,10 +99,13 @@ const viewEl = document.getElementById('view') as HTMLElement;
 const stuffingEl = document.getElementById('stuffing') as HTMLInputElement;
 const stuffingValueEl = document.getElementById('stuffingValue') as HTMLSpanElement;
 const stuffingNoteEl = document.getElementById('stuffingNote') as HTMLDivElement;
+const stuffingRowEl = document.getElementById('stuffingRow') as HTMLDivElement;
 
 /** Base pressure applied when the slider reads 1. */
 const PRESSURE_UNIT = 0.6;
 let stuffingTouched = false;
+/** Whether the current shape holds enough air for stuffing to do anything. */
+let canStuff = true;
 
 function applyStuffing() {
   if (!sim) return;
@@ -112,14 +115,20 @@ function applyStuffing() {
 }
 
 /** Stuffing pushes on the air a shape holds, so a piece with no inside — a
- *  flat circle, a ruffle — takes none however far the slider goes. Say so
- *  rather than leaving the slider looking broken. */
+ *  flat circle, a ruffle — takes none however far the slider goes. Turn the
+ *  control off and say why, rather than leaving it looking broken. */
 function showStuffing() {
   if (!sim) return;
-  const v = parseFloat(stuffingEl.value);
-  stuffingValueEl.textContent = v.toFixed(1);
-  const note = v > 0 && sim.stuffable < 0.05 ? 'This shape has no inside to fill.' : '';
-  if (stuffingNoteEl.textContent !== note) stuffingNoteEl.textContent = note;
+  stuffingValueEl.textContent = parseFloat(stuffingEl.value).toFixed(1);
+  // A dead band around the threshold: a shape settling near it would
+  // otherwise switch the control on and off as it relaxes.
+  if (sim.stuffable < 0.05) canStuff = false;
+  else if (sim.stuffable > 0.2) canStuff = true;
+  if (stuffingEl.disabled !== !canStuff) {
+    stuffingEl.disabled = !canStuff;
+    stuffingRowEl.classList.toggle('off', !canStuff);
+    stuffingNoteEl.textContent = canStuff ? '' : 'This shape has no inside to fill.';
+  }
 }
 stuffingEl.addEventListener('input', () => { stuffingTouched = true; applyStuffing(); });
 
@@ -166,6 +175,9 @@ function run() {
 
   if (graph.nodes.length === 0) { sim = undefined; return; }
   sim = new Simulation(graph);
+  // Assume the new shape holds air until it has been stepped and measured,
+  // rather than inheriting the last shape's answer.
+  canStuff = true;
   // Closed shapes get stuffed by default; open ones (tubes, bowls, flat pieces) do not.
   if (!stuffingTouched) stuffingEl.value = endsClosed(graph.rounds) ? '1' : '0';
   applyStuffing();

@@ -16,6 +16,8 @@ button { background: #4c6ef5; color: white; border: 0; border-radius: 4px; paddi
 button:hover { background: #5c7cfa; }
 button#toggle { background: #444; }
 select { background: #15151a; color: #eee; border: 1px solid #444; border-radius: 4px; padding: 5px; flex: 1; }
+.row.off { opacity: 0.5; }
+.row.off input { cursor: not-allowed; }
 #stuffingNote { font-size: 12px; color: #aaa; margin-top: -6px; }
 #stuffingNote:empty { display: none; }
 #messages { font-size: 12px; white-space: pre-wrap; }

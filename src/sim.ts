@@ -71,7 +71,8 @@ export class Simulation {
   /** Smoothed `enclosure()`, so the stuffing cannot chatter; -1 until measured. */
   private held = -1;
   /** Fraction of the stuffing the shape can take: 1 for a closed body, 0 for
-   *  fabric with no inside to hold any. Only meaningful once stuffed. */
+   *  fabric with no inside to hold any. Starts at 1 and is measured from the
+   *  first step, so read it only once the shape has been stepped. */
   stuffable = 1;
 
   constructor(readonly graph: StitchGraph, params: Partial<SimParams> = {}) {
@@ -279,16 +280,17 @@ export class Simulation {
     const { dt, damping, springK, repelK, repelRadius, pressure } = this.params;
     force.fill(0);
 
+    // How much stuffing the shape could take, measured whether or not any is
+    // being applied, so the control can be turned off for a shape that would
+    // ignore it. This also refreshes the normals the push itself follows.
+    const held = this.enclosure();
+    this.held = this.held < 0 ? held : this.held + 0.02 * (held - this.held);
+    const t = Math.max(0, Math.min(1, (this.held - 0.05) / 0.15));
+    this.stuffable = t * t * (3 - 2 * t);
+
     // Stuffing: push each stitch outward along the surface normal, as hard as
     // the shape has an inside to hold it.
-    if (pressure > 0) {
-      // Also refreshes the normals the push itself follows.
-      const held = this.enclosure();
-      this.held = this.held < 0 ? held : this.held + 0.02 * (held - this.held);
-      const t = Math.max(0, Math.min(1, (this.held - 0.05) / 0.15));
-      this.stuffable = t * t * (3 - 2 * t);
-      if (this.stuffable > 0) this.addPressure(pressure * this.stuffable);
-    }
+    if (pressure > 0 && this.stuffable > 0) this.addPressure(pressure * this.stuffable);
 
     // Springs
     for (let i = 0; i < this.ea.length; i++) {

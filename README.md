@@ -28,7 +28,8 @@ npm run build    # typecheck + production bundle in dist/
    fabric has thickness, and optional outward pressure along the surface
    normal to model stuffing. Stuffing pushes on the air the piece holds, so it
    scales with how much of a closed body the fabric makes and does nothing at
-   all to something with no inside, like a flat circle or a ruffle.
+   all to something with no inside, like a flat circle or a ruffle — for those
+   the stuffing control turns itself off.
 4. `src/render.ts` draws it with Three.js. Drag to orbit, scroll to zoom; on a
    touch screen, one finger orbits and two pinch and pan. "Recenter" puts the
    whole piece back in view.
