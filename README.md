@@ -30,7 +30,9 @@ npm run build    # typecheck + production bundle in dist/
    scales with how much of a closed body the fabric makes and does nothing at
    all to something with no inside, like a flat circle or a ruffle — for those
    the stuffing control turns itself off.
-4. `src/render.ts` draws it with Three.js. Drag to orbit, scroll to zoom; on a
+4. `src/render.ts` draws it with Three.js. Each stitch is a bead stretched
+   along the stitch it stands on, by its height relative to a single crochet,
+   so a taller stitch reads as a longer one. Drag to orbit, scroll to zoom; on a
    touch screen, one finger orbits and two pinch and pan. "Recenter" puts the
    whole piece back in view.
 
